@@ -1,6 +1,7 @@
 from functools import partial
 import numpy as np
 
+from core.logger import InfoLogger
 from torch.utils.data.distributed import DistributedSampler
 from torch import Generator, randperm
 from torch.utils.data import DataLoader, Subset
@@ -34,7 +35,7 @@ def define_dataloader(logger, opt):
     return dataloader, val_dataloader
 
 
-def define_dataset(logger, opt):
+def define_dataset(logger: InfoLogger, opt: dict):
     ''' loading Dataset() class from given file's name '''
     dataset_opt = opt['datasets'][opt['phase']]['which_dataset']
     phase_dataset = init_obj(dataset_opt, logger, default_file_name='data.dataset', init_type='Dataset')
@@ -50,7 +51,7 @@ def define_dataset(logger, opt):
             data_len *= debug_split
 
     dataloder_opt = opt['datasets'][opt['phase']]['dataloader']
-    valid_split = dataloder_opt.get('validation_split', 0)    
+    valid_split = dataloder_opt.get('validation_split', 0)
     
     ''' divide validation dataset, valid_split==0 when phase is test or validation_split is 0. '''
     if valid_split > 0.0 or 'debug' in opt['name']: 

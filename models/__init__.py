@@ -1,4 +1,6 @@
 import torch
+
+from core.logger import InfoLogger
 from core.praser import init_obj
 
 def create_model(**cfg_model):
@@ -12,7 +14,7 @@ def create_model(**cfg_model):
 
     return model
 
-def define_network(logger, opt, network_opt):
+def define_network(logger: InfoLogger, opt: dict, network_opt: dict):
     """ define network with weights initialization """
     net = init_obj(network_opt, logger, default_file_name='models.network', init_type='Network')
 

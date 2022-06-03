@@ -1,16 +1,32 @@
-import os
-from abc import abstractmethod
-from functools import partial
 import collections
-
+import os
 import torch
 import torch.nn as nn
 
 import core.util as Util
+
+from abc import abstractmethod
+from functools import partial
+from torch.utils.data.dataloader import DataLoader
+from torch.nn import Module
+from torch.nn.parallel import DataParallel as DP, DistributedDataParallel as DDP
+from typing import Callable, Union
+
+from core.logger import InfoLogger, VisualWriter
+
 CustomResult = collections.namedtuple('CustomResult', 'name result')
 
 class BaseModel():
-    def __init__(self, opt, phase_loader, val_loader, metrics, logger, writer):
+
+    def __init__(
+        self,
+        opt: dict,
+        phase_loader: DataLoader,
+        val_loader: DataLoader,
+        metrics: Callable,
+        logger: InfoLogger,
+        writer: VisualWriter,
+    ):
         """ init model with basic input, which are from __init__(**kwargs) function in inherited class """
         self.opt = opt
         self.phase = opt['phase']
@@ -79,7 +95,7 @@ class BaseModel():
         """ print network structure, only work on GPU 0 """
         if self.opt['global_rank'] !=0:
             return
-        if isinstance(network, nn.DataParallel) or isinstance(network, nn.parallel.DistributedDataParallel):
+        if isinstance(network, DP) or isinstance(network, DDP):
             network = network.module
         
         s, n = str(network), sum(map(lambda x: x.numel(), network.parameters()))
@@ -93,19 +109,19 @@ class BaseModel():
             return
         save_filename = '{}_{}.pth'.format(self.epoch, network_label)
         save_path = os.path.join(self.opt['path']['checkpoint'], save_filename)
-        if isinstance(network, nn.DataParallel) or isinstance(network, nn.parallel.DistributedDataParallel):
+        if isinstance(network, DP) or isinstance(network, DDP):
             network = network.module
         state_dict = network.state_dict()
         for key, param in state_dict.items():
             state_dict[key] = param.cpu()
         torch.save(state_dict, save_path)
 
-    def load_network(self, network, network_label, strict=True):
+    def load_network(self, network: Union[Module, DP, DDP], network_label: str, strict: bool = True):
         if self.opt['path']['resume_state'] is None:
             return 
         model_path = "{}_{}.pth".format(self. opt['path']['resume_state'], network_label)
         self.logger.info('Loading pretrained model from [{:s}] ...'.format(model_path))
-        if isinstance(network, nn.DataParallel) or isinstance(network, nn.parallel.DistributedDataParallel):
+        if isinstance(network, DP) or isinstance(network, DDP):
             network = network.module
         network.load_state_dict(torch.load(model_path, map_location = lambda storage, loc: Util.set_device(storage)), strict=strict)
 
@@ -123,7 +139,7 @@ class BaseModel():
         save_path = os.path.join(self.opt['path']['checkpoint'], save_filename)
         torch.save(state, save_path)
 
-    def resume_training(self, optimizers, schedulers):
+    def resume_training(self, optimizers: list, schedulers: list):
         """ resume the optimizers and schedulers for training, only work when phase is test or resume training enable """
         if self.phase!='train' or self. opt['path']['resume_state'] is None:
             return

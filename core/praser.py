@@ -1,13 +1,26 @@
 import os
-from collections import OrderedDict
 import json
-from pathlib import Path
+import importlib
+import shutil
+
+from collections import OrderedDict
 from datetime import datetime
 from functools import partial
-import importlib
-from types  import FunctionType
-import shutil
-def init_obj(opt, logger, *args, default_file_name='default file', given_module=None, init_type='Network', **modify_kwargs):
+from pathlib import Path
+from types import FunctionType, ModuleType
+
+from core.logger import InfoLogger
+
+
+def init_obj(
+    opt: dict,
+    logger: InfoLogger,
+    *args,
+    default_file_name: str = 'default file',
+    given_module: ModuleType = None,
+    init_type: str = 'Network',
+    **modify_kwargs,
+):
     """
     finds a function handle with the name given as 'name' in config,
     and returns the instance initialized with corresponding args.
@@ -32,7 +45,7 @@ def init_obj(opt, logger, *args, default_file_name='default file', given_module=
             module = given_module
         else:
             module = importlib.import_module(file_name)
-        
+
         attr = getattr(module, class_name)
         kwargs = opt.get('args', {})
         kwargs.update(modify_kwargs)
@@ -43,7 +56,6 @@ def init_obj(opt, logger, *args, default_file_name='default file', given_module=
         elif isinstance(attr, FunctionType): 
             ret = partial(attr, *args, **kwargs)
             ret.__name__  = attr.__name__
-            # ret = attr
         logger.info('{} [{:s}() form {:s}] is created.'.format(init_type, class_name, file_name))
     except:
         raise NotImplementedError('{} [{:s}() form {:s}] not recognized.'.format(init_type, class_name, file_name))

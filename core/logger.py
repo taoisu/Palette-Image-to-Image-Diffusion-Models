@@ -1,11 +1,14 @@
-import os
-from PIL import Image
 import importlib
-from datetime import datetime
 import logging
-import pandas as pd
+import os
 
 import core.util as Util
+import pandas as pd
+
+from datetime import datetime
+
+from PIL import Image
+
 
 class InfoLogger():
     """

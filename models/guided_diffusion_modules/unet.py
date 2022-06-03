@@ -1,9 +1,11 @@
-from abc import abstractmethod
 import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from abc import abstractmethod
+from torch import Tensor
 
 from .nn import (
     checkpoint,
@@ -13,9 +15,11 @@ from .nn import (
     gamma_embedding
 )
 
+
 class SiLU(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(x)
+
 
 class EmbedBlock(nn.Module):
     """
@@ -23,10 +27,11 @@ class EmbedBlock(nn.Module):
     """
 
     @abstractmethod
-    def forward(self, x, emb):
+    def forward(self, x: Tensor, emb: Tensor):
         """
         Apply the module to `x` given `emb` embeddings.
         """
+
 
 class EmbedSequential(nn.Sequential, EmbedBlock):
     """
@@ -34,13 +39,14 @@ class EmbedSequential(nn.Sequential, EmbedBlock):
     support it as an extra input.
     """
 
-    def forward(self, x, emb):
+    def forward(self, x: Tensor, emb: Tensor):
         for layer in self:
             if isinstance(layer, EmbedBlock):
                 x = layer(x, emb)
             else:
                 x = layer(x)
         return x
+
 
 class Upsample(nn.Module):
     """
@@ -50,7 +56,7 @@ class Upsample(nn.Module):
 
     """
 
-    def __init__(self, channels, use_conv, out_channel=None):
+    def __init__(self, channels: int, use_conv: bool, out_channel: int = None):
         super().__init__()
         self.channels = channels
         self.out_channel = out_channel or channels
@@ -58,12 +64,13 @@ class Upsample(nn.Module):
         if use_conv:
             self.conv = nn.Conv2d(self.channels, self.out_channel, 3, padding=1)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         assert x.shape[1] == self.channels
         x = F.interpolate(x, scale_factor=2, mode="nearest")
         if self.use_conv:
             x = self.conv(x)
         return x
+
 
 class Downsample(nn.Module):
     """
@@ -72,7 +79,7 @@ class Downsample(nn.Module):
     :param use_conv: a bool determining if a convolution is applied.
     """
 
-    def __init__(self, channels, use_conv, out_channel=None):
+    def __init__(self, channels: int, use_conv: bool, out_channel: int = None):
         super().__init__()
         self.channels = channels
         self.out_channel = out_channel or channels
@@ -86,7 +93,7 @@ class Downsample(nn.Module):
             assert self.channels == self.out_channel
             self.op = nn.AvgPool2d(kernel_size=stride, stride=stride)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         assert x.shape[1] == self.channels
         return self.op(x)
 
@@ -108,15 +115,15 @@ class ResBlock(EmbedBlock):
 
     def __init__(
         self,
-        channels,
-        emb_channels,
-        dropout,
-        out_channel=None,
-        use_conv=False,
-        use_scale_shift_norm=False,
-        use_checkpoint=False,
-        up=False,
-        down=False,
+        channels: int,
+        emb_channels: int,
+        dropout: float,
+        out_channel: int = None,
+        use_conv: bool = False,
+        use_scale_shift_norm: bool = False,
+        use_checkpoint: bool = False,
+        up: bool = False,
+        down: bool = False,
     ):
         super().__init__()
         self.channels = channels
@@ -202,6 +209,7 @@ class ResBlock(EmbedBlock):
             h = self.out_layers(h)
         return self.skip_connection(x) + h
 
+
 class AttentionBlock(nn.Module):
     """
     An attention block that allows spatial positions to attend to each other.
@@ -211,11 +219,11 @@ class AttentionBlock(nn.Module):
 
     def __init__(
         self,
-        channels,
-        num_heads=1,
-        num_head_channels=-1,
-        use_checkpoint=False,
-        use_new_attention_order=False,
+        channels: int,
+        num_heads: int = 1,
+        num_head_channels: int = -1,
+        use_checkpoint: bool = False,
+        use_new_attention_order: bool = False,
     ):
         super().__init__()
         self.channels = channels
@@ -255,11 +263,11 @@ class QKVAttentionLegacy(nn.Module):
     A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
     """
 
-    def __init__(self, n_heads):
+    def __init__(self, n_heads: int):
         super().__init__()
         self.n_heads = n_heads
 
-    def forward(self, qkv):
+    def forward(self, qkv: Tensor):
         """
         Apply QKV attention.
         :param qkv: an [N x (H * 3 * C) x T] tensor of Qs, Ks, and Vs.
@@ -315,6 +323,7 @@ class QKVAttention(nn.Module):
     def count_flops(model, _x, y):
         return count_flops_attn(model, _x, y)
 
+
 class UNet(nn.Module):
     """
     The full UNet model with attention and embedding.
@@ -344,25 +353,24 @@ class UNet(nn.Module):
 
     def __init__(
         self,
-        image_size,
-        in_channel,
-        inner_channel,
-        out_channel,
-        res_blocks,
-        attn_res,
-        dropout=0,
-        channel_mults=(1, 2, 4, 8),
-        conv_resample=True,
-        use_checkpoint=False,
-        use_fp16=False,
-        num_heads=1,
-        num_head_channels=-1,
-        num_heads_upsample=-1,
-        use_scale_shift_norm=True,
-        resblock_updown=True,
-        use_new_attention_order=False,
+        image_size: int,
+        in_channel: int,
+        inner_channel: int,
+        out_channel: int,
+        res_blocks: int,
+        attn_res: list,
+        dropout: float = 0,
+        channel_mults: tuple = (1, 2, 4, 8),
+        conv_resample: bool = True,
+        use_checkpoint: bool = False,
+        use_fp16: bool = False,
+        num_heads: int = 1,
+        num_head_channels: int = -1,
+        num_heads_upsample: int = -1,
+        use_scale_shift_norm: bool = True,
+        resblock_updown: bool = True,
+        use_new_attention_order: bool = False,
     ):
-
         super().__init__()
 
         if num_heads_upsample == -1:
@@ -522,7 +530,7 @@ class UNet(nn.Module):
             zero_module(nn.Conv2d(input_ch, out_channel, 3, padding=1)),
         )
 
-    def forward(self, x, gammas):
+    def forward(self, x: Tensor, gammas: Tensor):
         """
         Apply the model to an input batch.
         :param x: an [N x 2 x ...] Tensor of inputs (B&W)
@@ -543,6 +551,7 @@ class UNet(nn.Module):
             h = module(h, emb)
         h = h.type(x.dtype)
         return self.out(h)
+
 
 if __name__ == '__main__':
     b, c, h, w = 3, 6, 64, 64

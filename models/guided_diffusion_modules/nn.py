@@ -7,9 +7,12 @@ import numpy as np
 import torch 
 import torch.nn as nn
 
+from torch import Tensor
+
 
 class GroupNorm32(nn.GroupNorm):
-    def forward(self, x):
+
+    def forward(self, x: Tensor):
         return super().forward(x.float()).type(x.dtype)
 
 
@@ -38,7 +41,7 @@ def mean_flat(tensor):
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
 
-def normalization(channels):
+def normalization(channels: int):
     """
     Make a standard normalization layer.
 
@@ -118,7 +121,7 @@ def count_flops_attn(model, _x, y):
     model.total_ops += torch.DoubleTensor([matmul_ops])
 
 
-def gamma_embedding(gammas, dim, max_period=10000):
+def gamma_embedding(gammas: Tensor, dim: int, max_period: int = 10000):
     """
     Create sinusoidal timestep embeddings.
     :param gammas: a 1-D Tensor of N indices, one per batch element.
