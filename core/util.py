@@ -1,9 +1,12 @@
-import random
-import numpy as np
 import math
+import random
 import torch
+
+import numpy as np
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.utils import make_grid
+from typing import Any
 
 
 def tensor2img(tensor, out_type=np.uint8, min_max=(-1, 1)):
@@ -30,47 +33,50 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(-1, 1)):
         # Important. Unlike matlab, numpy.unit8() WILL NOT round by default.
     return img_np.astype(out_type)
 
+
 def postprocess(images):
-	return [tensor2img(image) for image in images]
+    return [tensor2img(image) for image in images]
 
 
 def set_seed(seed, gl_seed=0):
-	"""  set random seed, gl_seed used in worker_init_fn function """
-	if seed >=0 and gl_seed>=0:
-		seed += gl_seed
-		torch.manual_seed(seed)
-		torch.cuda.manual_seed_all(seed)
-		np.random.seed(seed)
-		random.seed(seed)
+    """  set random seed, gl_seed used in worker_init_fn function """
+    if seed >=0 and gl_seed>=0:
+        seed += gl_seed
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
 
-	''' change the deterministic and benchmark maybe cause uncertain convolution behavior. 
-		speed-reproducibility tradeoff https://pytorch.org/docs/stable/notes/randomness.html '''
-	if seed >=0 and gl_seed>=0:  # slower, more reproducible
-		torch.backends.cudnn.deterministic = True
-		torch.backends.cudnn.benchmark = False
-	else:  # faster, less reproducible
-		torch.backends.cudnn.deterministic = False
-		torch.backends.cudnn.benchmark = True
+    ''' change the deterministic and benchmark maybe cause uncertain convolution behavior. 
+        speed-reproducibility tradeoff https://pytorch.org/docs/stable/notes/randomness.html '''
+    if seed >=0 and gl_seed>=0:  # slower, more reproducible
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:  # faster, less reproducible
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
 
-def set_gpu(args, distributed=False, rank=0):
-	""" set parameter to gpu or ddp """
-	if args is None:
-		return None
-	if distributed and isinstance(args, torch.nn.Module):
-		return DDP(args.cuda(), device_ids=[rank], output_device=rank, broadcast_buffers=True, find_unused_parameters=True)
-	else:
-		return args.cuda()
-		
-def set_device(args, distributed=False, rank=0):
-	""" set parameter to gpu or cpu """
-	if torch.cuda.is_available():
-		if isinstance(args, list):
-			return (set_gpu(item, distributed, rank) for item in args)
-		elif isinstance(args, dict):
-			return {key:set_gpu(args[key], distributed, rank) for key in args}
-		else:
-			args = set_gpu(args, distributed, rank)
-	return args
+
+def set_gpu(args: Any, distributed: bool = False, rank: int = 0):
+    """ set parameter to gpu or ddp """
+    if args is None:
+        return None
+    if distributed and isinstance(args, torch.nn.Module):
+        return DDP(args.cuda(), device_ids=[rank], output_device=rank, broadcast_buffers=True, find_unused_parameters=True)
+    else:
+        return args.cuda()
+
+
+def set_device(args: Any, distributed: bool = False, rank: int = 0):
+    """ set parameter to gpu or cpu """
+    if torch.cuda.is_available():
+        if isinstance(args, list):
+            return (set_gpu(item, distributed, rank) for item in args)
+        elif isinstance(args, dict):
+            return {key:set_gpu(args[key], distributed, rank) for key in args}
+        else:
+            args = set_gpu(args, distributed, rank)
+    return args
 
 
 

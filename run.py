@@ -4,9 +4,10 @@ import warnings
 import torch
 import torch.multiprocessing as mp
 
-from core.logger import VisualWriter, InfoLogger
 import core.praser as Praser
 import core.util as Util
+
+from core.logger import VisualWriter, InfoLogger
 from data import define_dataloader
 from models import create_model, define_network, define_loss, define_metric, define_optimizer, define_scheduler
 
@@ -45,7 +46,7 @@ def main_worker(gpu, ngpus_per_node, opt):
     optimizers = [define_optimizer(trian_params[_idx], phase_logger, item_opt) 
         for _idx, item_opt in enumerate(opt['model']['which_optimizers'])]
     optimizers = [optimizer for optimizer in optimizers if optimizer is not None]
-    
+
     lr_schedulers = [define_scheduler(optimizers[_idx], phase_logger, item_opt)
         for _idx, item_opt in enumerate(opt['model']['which_lr_schedulers'])]
     lr_schedulers = [lr_scheduler for lr_scheduler in lr_schedulers if lr_scheduler is not None]
@@ -71,8 +72,8 @@ def main_worker(gpu, ngpus_per_node, opt):
             model.test()
     finally:
         phase_writer.close()
-        
-        
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, default='config/colorization_mirflickr25k.json', help='JSON file for configuration')

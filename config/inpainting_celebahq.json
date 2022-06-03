@@ -11,7 +11,7 @@
         "results": "results",
         "checkpoint": "checkpoint",
         // "resume_state": "experiments/train_inpainting_celebahq_220426_233652/checkpoint/200" 
-        "resume_state": null // ex: 100, loading .state  and .pth from given epoch and iteration
+        "resume_state": "checkpoints/200" // ex: 100, loading .state  and .pth from given epoch and iteration
     },
 
     "datasets": { // train or test
@@ -70,11 +70,12 @@
             "args": {
                 "sample_num": 8, // process of each image
                 "task": "inpainting",
-                "ema_scheduler": {
-                    "ema_start": 1,
-                    "ema_iter": 1,
-                    "ema_decay": 0.9999
-                }
+                // "ema_scheduler": {
+                //     "ema_start": 1,
+                //     "ema_iter": 1,
+                //     "ema_decay": 0.9999
+                // }
+                "ema_scheduler": null
                 // "ema_scheduler": { // debug
                 //     "ema_start": 0,
                 //     "ema_iter": 10,

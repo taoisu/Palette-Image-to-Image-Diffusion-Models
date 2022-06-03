@@ -1,15 +1,16 @@
 import torch
-from torch import nn
+import torch.utils.data
+
+from torch import nn, Tensor
 from torch.autograd import Variable
 from torch.nn import functional as F
-import torch.utils.data
 
 from torchvision.models.inception import inception_v3
 
 import numpy as np
 from scipy.stats import entropy
 
-def mae(input, target):
+def mae(input: Tensor, target: Tensor):
     with torch.no_grad():
         loss = nn.L1Loss()
         output = loss(input, target)

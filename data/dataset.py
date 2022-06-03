@@ -6,6 +6,8 @@ import torch
 import numpy as np
 import cv2
 
+from typing import Callable
+
 from .util.mask import (bbox2mask, brush_stroke_mask, get_irregular_mask, random_bbox, random_cropping_bbox)
 
 IMG_EXTENSIONS = [
@@ -16,7 +18,7 @@ IMG_EXTENSIONS = [
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
-def make_dataset(dir):
+def make_dataset(dir: str):
     if os.path.isfile(dir):
         images = [i for i in np.genfromtxt(dir, dtype=np.str, encoding='utf-8')]
     else:
@@ -30,27 +32,35 @@ def make_dataset(dir):
 
     return images
 
-def pil_loader(path):
+def pil_loader(path: str):
     return Image.open(path).convert('RGB')
 
 class InpaintDataset(data.Dataset):
-    def __init__(self, data_root, mask_config={}, data_len=-1, image_size=[256, 256], loader=pil_loader):
+
+    def __init__(
+        self,
+        data_root: str,
+        mask_config: dict = {},
+        data_len: int = -1,
+        image_size: list = [256, 256],
+        loader: Callable = pil_loader,
+    ):
         imgs = make_dataset(data_root)
         if data_len > 0:
             self.imgs = imgs[:int(data_len)]
         else:
             self.imgs = imgs
         self.tfs = transforms.Compose([
-                transforms.Resize((image_size[0], image_size[1])),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5,0.5, 0.5])
+            transforms.Resize((image_size[0], image_size[1])),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5,0.5, 0.5])
         ])
         self.loader = loader
         self.mask_config = mask_config
         self.mask_mode = self.mask_config['mask_mode']
         self.image_size = image_size
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         ret = {}
         path = self.imgs[index]
         img = self.tfs(self.loader(path))

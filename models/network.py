@@ -1,12 +1,19 @@
 import math
 import torch
-from inspect import isfunction
-from functools import partial
+
 import numpy as np
+
+from functools import partial
+from inspect import isfunction
+from torch import Tensor
 from tqdm import tqdm
+
 from core.base_network import BaseNetwork
+
+
 class Network(BaseNetwork):
-    def __init__(self, unet, beta_schedule, module_name='sr3', **kwargs):
+
+    def __init__(self, unet: dict, beta_schedule: dict, module_name: str = 'sr3', **kwargs):
         super(Network, self).__init__(**kwargs)
         if module_name == 'sr3':
             from .sr3_modules.unet import UNet
@@ -19,11 +26,10 @@ class Network(BaseNetwork):
     def set_loss(self, loss_fn):
         self.loss_fn = loss_fn
 
-    def set_new_noise_schedule(self, device=torch.device('cuda'), phase='train'):
+    def set_new_noise_schedule(self, device: torch.device = torch.device('cuda'), phase: str = 'train'):
         to_torch = partial(torch.tensor, dtype=torch.float32, device=device)
         betas = make_beta_schedule(**self.beta_schedule[phase])
-        betas = betas.detach().cpu().numpy() if isinstance(
-            betas, torch.Tensor) else betas
+        betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         alphas = 1. - betas
 
         timesteps, = betas.shape
@@ -44,13 +50,13 @@ class Network(BaseNetwork):
         self.register_buffer('posterior_mean_coef1', to_torch(betas * np.sqrt(gammas_prev) / (1. - gammas)))
         self.register_buffer('posterior_mean_coef2', to_torch((1. - gammas_prev) * np.sqrt(alphas) / (1. - gammas)))
 
-    def predict_start_from_noise(self, y_t, t, noise):
+    def predict_start_from_noise(self, y_t: Tensor, t: Tensor, noise: Tensor):
         return (
             extract(self.sqrt_recip_gammas, t, y_t.shape) * y_t -
             extract(self.sqrt_recipm1_gammas, t, y_t.shape) * noise
         )
 
-    def q_posterior(self, y_0_hat, y_t, t):
+    def q_posterior(self, y_0_hat: Tensor, y_t: Tensor, t: Tensor):
         posterior_mean = (
             extract(self.posterior_mean_coef1, t, y_t.shape) * y_0_hat +
             extract(self.posterior_mean_coef2, t, y_t.shape) * y_t
@@ -58,16 +64,21 @@ class Network(BaseNetwork):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, y_t.shape)
         return posterior_mean, posterior_log_variance_clipped
 
-    def p_mean_variance(self, y_t, t, clip_denoised: bool, y_cond=None):
+    def p_mean_variance(self, y_t: Tensor, t: Tensor, clip_denoised: bool, y_cond: Tensor = None):
         noise_level = extract(self.gammas, t, x_shape=(1, 1)).to(y_t.device)
         y_0_hat = self.predict_start_from_noise(
-                y_t, t=t, noise=self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level))
+            y_t,
+            t=t,
+            noise=self.denoise_fn(torch.cat([y_cond, y_t], dim=1),
+            noise_level))
 
         if clip_denoised:
             y_0_hat.clamp_(-1., 1.)
 
         model_mean, posterior_log_variance = self.q_posterior(
-            y_0_hat=y_0_hat, y_t=y_t, t=t)
+            y_0_hat=y_0_hat,
+            y_t=y_t,
+            t=t)
         return model_mean, posterior_log_variance
 
     def q_sample(self, y_0, sample_gammas, noise=None):
@@ -78,19 +89,22 @@ class Network(BaseNetwork):
         )
 
     @torch.no_grad()
-    def p_sample(self, y_t, t, clip_denoised=True, y_cond=None):
+    def p_sample(self, y_t: Tensor, t: Tensor, clip_denoised: bool = True, y_cond: Tensor = None):
         model_mean, model_log_variance = self.p_mean_variance(
-            y_t=y_t, t=t, clip_denoised=clip_denoised, y_cond=y_cond)
+            y_t=y_t,
+            t=t,
+            clip_denoised=clip_denoised,
+            y_cond=y_cond)
         noise = torch.randn_like(y_t) if any(t>0) else torch.zeros_like(y_t)
         return model_mean + noise * (0.5 * model_log_variance).exp()
 
     @torch.no_grad()
-    def restoration(self, y_cond, y_t=None, y_0=None, mask=None, sample_num=8):
+    def restoration(self, y_cond: Tensor, y_t: Tensor = None, y_0: Tensor = None, mask: Tensor = None, sample_num: int = 8):
         b, *_ = y_cond.shape
 
         assert self.num_timesteps > sample_num, 'num_timesteps must greater than sample_num'
-        sample_inter = (self.num_timesteps//sample_num)
-        
+        sample_inter = (self.num_timesteps // sample_num)
+
         y_t = default(y_t, lambda: torch.randn_like(y_cond))
         ret_arr = y_t
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
@@ -133,7 +147,7 @@ def default(val, d):
         return val
     return d() if isfunction(d) else d
 
-def extract(a, t, x_shape=(1,1,1,1)):
+def extract(a: Tensor, t: Tensor, x_shape: tuple = (1,1,1,1)):
     b, *_ = t.shape
     out = a.gather(-1, t)
     return out.reshape(b, *((1,) * (len(x_shape) - 1)))
@@ -146,29 +160,21 @@ def _warmup_beta(linear_start, linear_end, n_timestep, warmup_frac):
         linear_start, linear_end, warmup_time, dtype=np.float64)
     return betas
 
-def make_beta_schedule(schedule, n_timestep, linear_start=1e-6, linear_end=1e-2, cosine_s=8e-3):
+def make_beta_schedule(schedule: str, n_timestep: int, linear_start: float = 1e-6, linear_end: float = 1e-2, cosine_s: float = 8e-3):
     if schedule == 'quad':
-        betas = np.linspace(linear_start ** 0.5, linear_end ** 0.5,
-                            n_timestep, dtype=np.float64) ** 2
+        betas = np.linspace(linear_start ** 0.5, linear_end ** 0.5, n_timestep, dtype=np.float64) ** 2
     elif schedule == 'linear':
-        betas = np.linspace(linear_start, linear_end,
-                            n_timestep, dtype=np.float64)
+        betas = np.linspace(linear_start, linear_end, n_timestep, dtype=np.float64)
     elif schedule == 'warmup10':
-        betas = _warmup_beta(linear_start, linear_end,
-                             n_timestep, 0.1)
+        betas = _warmup_beta(linear_start, linear_end, n_timestep, 0.1)
     elif schedule == 'warmup50':
-        betas = _warmup_beta(linear_start, linear_end,
-                             n_timestep, 0.5)
+        betas = _warmup_beta(linear_start, linear_end, n_timestep, 0.5)
     elif schedule == 'const':
         betas = linear_end * np.ones(n_timestep, dtype=np.float64)
     elif schedule == 'jsd':  # 1/T, 1/(T-1), 1/(T-2), ..., 1
-        betas = 1. / np.linspace(n_timestep,
-                                 1, n_timestep, dtype=np.float64)
+        betas = 1. / np.linspace(n_timestep, 1, n_timestep, dtype=np.float64)
     elif schedule == "cosine":
-        timesteps = (
-            torch.arange(n_timestep + 1, dtype=torch.float64) /
-            n_timestep + cosine_s
-        )
+        timesteps = (torch.arange(n_timestep + 1, dtype=torch.float64) / n_timestep + cosine_s)
         alphas = timesteps / (1 + cosine_s) * math.pi / 2
         alphas = torch.cos(alphas).pow(2)
         alphas = alphas / alphas[0]
